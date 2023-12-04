@@ -7,15 +7,36 @@ import UiContainer from './ui-container';
 import UiContainerSection from './ui-container-section';
 import UnityButton from '../generics/unity-button';
 import CircularWithValueLabel from './circular-progress';
+import ImpText from './imp-text';
+import HandClose from './images/Hand_Close.png';
+import HandOpen from './images/Hand_Open.png';
+import NoMotion from './images/No_Motion.png';
+import WristExtension from './images/Wrist_Extension.png';
+import WristFlexion from './images/Wrist_Flexion.png';
+import Ready from './images/ready.jpg';
+import ExperimentMovementNotifier from '../common/action-notifier';
 
+const DESCRIPTIONS = ['Hand Close', 'Hand Open', 'No Motion', 'Wrist Extension', 'Wrist Flexion'];
+const IMAGES = [HandClose, HandOpen, NoMotion, WristExtension, WristFlexion];
 
 export default class ExperimentUI extends React.Component {
 
-  intervalLength = 100;
+  intervalLength = process.env.REACT_APP_INTERVAL_LENGTH || 5000;
 
   constructor(props) {
     super(props);
-    this.state = {
+    this.state = this.getInitialState();
+
+    this.changeStateAfterInterval = this.changeStateAfterInterval.bind(this);
+    this.startTimer = this.startTimer.bind(this);
+    this.nextRep = this.nextRep.bind(this);
+    this.redoRep = this.redoRep.bind(this);
+    this.actionNotifier = new ExperimentMovementNotifier();
+    this.actionNotifier.notifyExperimentHasStarted(Date.now());
+  }
+
+  getInitialState() {
+    return {
       rep: 1,
       epn: 1,
       progress: 0,
@@ -23,13 +44,9 @@ export default class ExperimentUI extends React.Component {
       completed: false,
       showPreview: true,
       previewTime: 0,
-      completed: []
+      current: 0,
+      selected: [] 
     };
-
-    this.changeStateAfterInterval = this.changeStateAfterInterval.bind(this);
-    this.startTimer = this.startTimer.bind(this);
-    this.nextRep = this.nextRep.bind(this);
-    this.redoRep = this.redoRep.bind(this);
   }
   
   startTimer() {
@@ -53,6 +70,8 @@ export default class ExperimentUI extends React.Component {
     let completed = ps.completed;
     let showPreview = ps.showPreview;
     let previewTime = ps.previewTime;
+    let current = ps.current;
+    let selected = ps.selected;
 
     if (showPreview) {
       previewTime = previewTime + 10;
@@ -67,21 +86,49 @@ export default class ExperimentUI extends React.Component {
     // Start changing states
     progress = ps.progress + 10;
     if (progress > 100) {
-      completed.push("${rep}-${epn}");
-      epn = epn + 1;
+      // completed.push("${rep}-${epn}");
+      epn = epn + 1; 
       showPreview = true;
       progress = 0;
       if (epn > 5) {
         rep = rep + 1;
-        startRep = false;
         epn = 1;
+        startRep = false;
+        selected = [];
       }
+      else {
+        selected.push(current);
+      }
+
+      current = this.getNewExperimentNumber(selected);
+      let timeInMillis = Date.now() + (this.intervalLength * 5.5);
+      this.actionNotifier.notify(rep, current, timeInMillis);     
       if (rep > 5) {
         completed = true;
       }
     }
 
-    return {progress, epn, rep, completed, startRep, showPreview};
+    return {progress, epn, rep, completed, startRep, showPreview, current, selected};
+  }
+
+  getNewExperimentNumber(selected) {
+    // console.log("Selected");
+    // console.log(selected);
+    let available = [];
+    for (let i = 0; i < 5; i++) {
+      if (!selected.includes(i)) {
+          available.push(i);
+      }
+    }
+
+    // console.log("Available");
+    // console.log(available);
+
+    if (available.length == 1) return available[0];
+    let randomIndex = Math.floor(Math.random() * available.length);
+    // console.log("Random Index");
+    // console.log(available[randomIndex]);
+    return available[randomIndex];
   }
 
   componentDidMount() {
@@ -94,7 +141,7 @@ export default class ExperimentUI extends React.Component {
 
   redoRep() {
     this.setState((ps) => {
-      return {rep: (ps.rep - 1)};
+      return {rep: (ps.rep - 1), startRep: true};
     });
   }
 
@@ -121,7 +168,7 @@ function DescritpionSection(props) {
   let epn = props.ms.epn;
   let rep = props.ms.rep;
   let epnProgress = (epn - 1) * 20 + (progress / 100 * 20);
-  let repProgress = (rep - 1) * 20 + (epn - 1) * 5;
+  let repProgress = (rep - 1) * 20 + (epn - 1) * 4;
 
   if (props.ms.startRep == false) {
 
@@ -130,7 +177,7 @@ function DescritpionSection(props) {
   epn = 1;
   rep = props.ms.rep;
   epnProgress = (epn - 1) * 20 + (progress / 100 * 20);
-  repProgress = (rep - 1) * 20 + (epn - 1) * 5;
+  repProgress = (rep - 1) * 20 + (epn - 1) * 4;
     
     return(
       <UiContainerSection classes='eui-section-1'>
@@ -143,6 +190,8 @@ function DescritpionSection(props) {
       </UiContainerSection>);
   }
 
+  let description = DESCRIPTIONS[props.ms.current];
+
     return(
     <UiContainerSection classes='eui-section-1'>
       <div className='flex-columns'>
@@ -152,7 +201,7 @@ function DescritpionSection(props) {
       <CircularWithValueLabel progress={repProgress} />
       </div>
       <div className='flex-columns'>
-      <Typography  style={{marginRight: '16px'}} variant='body1' color=''>Movement: {props.ms.epn}. Wrist Extension</Typography>
+      <Typography  style={{marginRight: '16px'}} variant='body1' color=''>Movement: {props.ms.current}. {description}</Typography>
       <div style={{flexGrow: 1}}></div>
       <Typography variant="body2">Movement Progress: </Typography>
       <CircularWithValueLabel progress={epnProgress} />
@@ -165,10 +214,22 @@ function DescritpionSection(props) {
 
 function ImageSection(props) {
 
+  let image = IMAGES[props.ms.current];
+  let imgStyles={'opacity': 1};
+
+  if (props.ms.startRep == false) 
+  {
+      image = Ready;
+  }
+
+  if (props.ms.showPreview && props.ms.startRep) {
+    imgStyles['opacity'] = 0.5;
+  }
+
     return(
     <UiContainerSection classes='eui-section-1'>
       <div className='center-image-container'>
-        <img className='exp-ui-image' src={Logo} alt="" />
+        <img className='exp-ui-image' src={image} style={imgStyles} alt="" />
       </div>
 
     </UiContainerSection>);
@@ -250,17 +311,12 @@ else {
 }
 }
 
-
-function ImpText(props) {
-  return (<span style={{fontWeight: '600'}}> {props.children} </span>);
-}
-
 function InteractionSection(props) {
 
   let html = [];
   if (props.ms.startRep == false) {
-    html.push(<Typography color='secondary' variant='h6'>Action Needed!</Typography>);
-    html.push(<Typography variant='body2'>Click on the  
+    html.push(<Typography key="int-sec-1" color='secondary' variant='h6'>Action Needed!</Typography>);
+    html.push(<Typography key="int-sec-2" variant='body2'>Click on the  
     <ImpText> Start Next Repetition</ImpText> 
     to move on to the next repetition. Or, if you need you need to redo this 
     section, click on the <ImpText>Redo Current Repetition</ImpText> to redo this repetition.</Typography>);
@@ -280,14 +336,12 @@ function InteractionSection(props) {
         <div style={{marginBottom: '24px'}}>{html}</div>
         <div className='flex-columns-reverse'>
         <div className='flex-childr' style={{marginRight: '16px'}}>
-          <Tooltip title="Move on to the next repetition.">
-            <UnityButton onClick={handleNext}>Start Repetition {props.ms.rep}</UnityButton>
-          </Tooltip>
+        <UnityButton onClick={handleNext}>Start Repetition {props.ms.rep}</UnityButton>
+
         </div>
         <div className='flex-childr' style={{marginRight: '16px'}}>
-          <Tooltip title="Redo this entire repetition.">
-          <UnityButton onClick={handleRedo}>Redo Repetition {props.ms.rep - 1}</UnityButton>
-          </Tooltip>
+        <UnityButton onClick={handleRedo}>Redo Repetition {props.ms.rep - 1}</UnityButton>
+
         </div>
        
         </div>
