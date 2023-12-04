@@ -1,0 +1,10 @@
+.ui-container-root {
+    padding: 32px 5%;
+    width: 60%;
+    margin: auto;
+}
+
+.ui-container-l2 {
+    background-color: rgba(233, 242, 243, 0.8);
+    padding: 2% 5%;
+}
